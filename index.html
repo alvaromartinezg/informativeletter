@@ -40,9 +40,11 @@ el("btn").addEventListener("click", async ()=>{
   try {
     const rsp = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/vnd.google-earth.kmz",
-                 "Accept": "application/vnd.google-earth.kmz,application/octet-stream,*/*" },
-      body: f            // <<--- SIN FormData, va el blob crudo
+      headers: {
+        "Content-Type": "application/vnd.google-earth.kmz",
+        "Accept": "application/vnd.google-earth.kmz,application/octet-stream,*/*"
+      },
+      body: f
     });
 
     if(!rsp.ok){
@@ -56,7 +58,6 @@ el("btn").addEventListener("click", async ()=>{
     el("out").innerHTML = `<a download="Exportado.kmz" href="${url}">Descargar Exportado.kmz</a>`;
     el("status").textContent = "Listo ✅";
   } catch (e) {
-    console.error(e);
     el("status").textContent = "Fallo: " + e.message;
     el("out").textContent = "";
   } finally {
