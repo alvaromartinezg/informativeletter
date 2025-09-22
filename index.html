@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KMZ Processor</title>
+<style>
+  body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 40px auto; }
+  h1 { color: #0A6; }
+  .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
+  button { padding: 10px 16px; border-radius: 8px; border: 0; background:#0A6; color:#fff; cursor:pointer; }
+  button[disabled] { opacity:.6; cursor:not-allowed; }
+  .muted { color:#666; font-size: 0.95rem; }
+  .row { display:flex; gap:12px; align-items:center; margin-top:12px; }
+</style>
+</head>
+<body>
+  <h1>Procesar KMZ</h1>
+  <div class="card">
+    <p class="muted">Sube tu <strong>KMZ</strong> (reemplazará <code>TEST.kmz</code>) y descarga <code>Exportado.kmz</code>.</p>
+    <div class="row">
+      <input id="file" type="file" accept=".kmz,.kml" />
+      <button id="btn">Procesar</button>
+    </div>
+    <p id="status" class="muted" style="margin-top:10px;"></p>
+    <p id="out" style="margin-top:10px;"></p>
+  </div>
+
+<script>
+const API_URL = "https://TU_ID.execute-api.REGION.amazonaws.com/prod/process"; // <-- cambia esto
+
+const el = (id)=>document.getElementById(id);
+el("btn").addEventListener("click", async ()=>{
+  const f = el("file").files[0];
+  if(!f){ alert("Selecciona un KMZ/KML"); return; }
+
+  el("btn").disabled = true;
+  el("status").textContent = "Subiendo y procesando…";
+
+  try {
+    const fd = new FormData();
+    fd.append("file", f, f.name);
+
+    const rsp = await fetch(API_URL, {
+      method: "POST",
+      body: fd,
+    });
+
+    if(!rsp.ok){
+      const txt = await rsp.text().catch(()=> "");
+      throw new Error("Error API: " + rsp.status + " " + txt);
+    }
+
+    // Respuesta binaria (API Gateway + Lambda proxy devuelven base64 ya decodificado por fetch si C-T es binario)
+    const blob = await rsp.blob();
+    const name = "Exportado.kmz";
+    const url = URL.createObjectURL(blob);
+    el("out").innerHTML = `<a download="${name}" href="${url}">Descargar ${name}</a>`;
+    el("status").textContent = "Listo ✅";
+  } catch (e) {
+    console.error(e);
+    el("status").textContent = "Fallo: " + e.message;
+    el("out").textContent = "";
+  } finally {
+    el("btn").disabled = false;
+  }
+});
+</script>
+</body>
+</html>
