@@ -27,7 +27,7 @@
   </div>
 
 <script>
-const API_URL = "https://ovqpaoa1ye.execute-api.us-east-2.amazonaws.com/prod/proccess"; // <-- cambia esto
+const API_URL = "https://ovqpaoa1ye.execute-api.us-east-2.amazonaws.com/prod/proccess";
 
 const el = (id)=>document.getElementById(id);
 el("btn").addEventListener("click", async ()=>{
@@ -38,24 +38,22 @@ el("btn").addEventListener("click", async ()=>{
   el("status").textContent = "Subiendo y procesando…";
 
   try {
-    const fd = new FormData();
-    fd.append("file", f, f.name);
-
     const rsp = await fetch(API_URL, {
       method: "POST",
-      body: fd,
+      headers: { "Content-Type": "application/vnd.google-earth.kmz",
+                 "Accept": "application/vnd.google-earth.kmz,application/octet-stream,*/*" },
+      body: f            // <<--- SIN FormData, va el blob crudo
     });
 
     if(!rsp.ok){
-      const txt = await rsp.text().catch(()=> "");
-      throw new Error("Error API: " + rsp.status + " " + txt);
+      const ct = rsp.headers.get("Content-Type") || "";
+      const txt = ct.includes("application/json") ? JSON.stringify(await rsp.json()).slice(0,500) : (await rsp.text()).slice(0,500);
+      throw new Error(`Error API ${rsp.status}: ${txt}`);
     }
 
-    // Respuesta binaria (API Gateway + Lambda proxy devuelven base64 ya decodificado por fetch si C-T es binario)
     const blob = await rsp.blob();
-    const name = "Exportado.kmz";
     const url = URL.createObjectURL(blob);
-    el("out").innerHTML = `<a download="${name}" href="${url}">Descargar ${name}</a>`;
+    el("out").innerHTML = `<a download="Exportado.kmz" href="${url}">Descargar Exportado.kmz</a>`;
     el("status").textContent = "Listo ✅";
   } catch (e) {
     console.error(e);
@@ -66,5 +64,6 @@ el("btn").addEventListener("click", async ()=>{
   }
 });
 </script>
+
 </body>
 </html>
