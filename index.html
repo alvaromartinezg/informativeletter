@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KMZ Processor</title>
+<title>KMZ Processor (asíncrono con Supabase)</title>
 <style>
   body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 40px auto; }
   h1 { color: #0A6; }
@@ -12,59 +12,98 @@
   button[disabled] { opacity:.6; cursor:not-allowed; }
   .muted { color:#666; font-size: 0.95rem; }
   .row { display:flex; gap:12px; align-items:center; margin-top:12px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
+  progress { width: 100%; height: 10px; }
 </style>
 </head>
 <body>
   <h1>Procesar KMZ</h1>
   <div class="card">
-    <p class="muted">Sube tu <strong>KMZ</strong> (reemplazará <code>TEST.kmz</code>) y descarga <code>Exportado.kmz</code>.</p>
+    <p class="muted">
+      Sube tu <strong>KMZ/KML</strong>. El archivo se envía a <em>Supabase Storage</em>, se procesa en segundo plano y
+      podrás descargar <code>Exportado.kmz</code> cuando termine.
+    </p>
     <div class="row">
       <input id="file" type="file" accept=".kmz,.kml" />
       <button id="btn">Procesar</button>
     </div>
     <p id="status" class="muted" style="margin-top:10px;"></p>
-    <p id="out" style="margin-top:10px;"></p>
+    <progress id="bar" max="5" value="0" style="margin-top:6px; display:none;"></progress>
+    <p id="out" class="mono" style="margin-top:10px;"></p>
   </div>
 
 <script>
-const API_URL = "https://ovqpaoa1ye.execute-api.us-east-2.amazonaws.com/prod/proccess";
+const API_BASE = "https://ovqpaoa1ye.execute-api.us-east-2.amazonaws.com/prod";
 
 const el = (id)=>document.getElementById(id);
+const step = (n, txt)=>{
+  el("status").textContent = txt;
+  const bar = el("bar");
+  bar.style.display = "block";
+  bar.value = n; // 0..5
+};
+
+async function subirYProcesar(file) {
+  // 1) Pedir URL firmada de subida (Supabase)
+  step(1, "1/5: solicitando URL de subida…");
+  const pres = await fetch(`${API_BASE}/signed-url?filename=${encodeURIComponent(file.name)}`);
+  if (!pres.ok) throw new Error(`signed-url: ${pres.status}`);
+  const signed = await pres.json(); // { uploadUrl, path }
+
+  // 2) Subir el archivo a Supabase (PUT a la signed URL)
+  step(2, "2/5: subiendo archivo a Supabase…");
+  const up = await fetch(signed.uploadUrl, { method:"PUT", body:file });
+  if (!up.ok) throw new Error(`subida Supabase: ${up.status}`);
+
+  // 3) Iniciar job en el backend (SQS/Dynamo)
+  step(3, "3/5: iniciando procesamiento…");
+  const started = await fetch(`${API_BASE}/start`, {
+    method: "POST",
+    headers: { "Content-Type":"application/json" },
+    body: JSON.stringify({ path: signed.path })
+  });
+  if (!started.ok) throw new Error(`start: ${started.status}`);
+  const { jobId } = await started.json();
+
+  // 4) Polling de estado hasta terminar
+  step(4, "4/5: procesando… esto puede tardar (no cierres la pestaña).");
+  while (true) {
+    await new Promise(r => setTimeout(r, 5000)); // cada 5s
+    const st = await fetch(`${API_BASE}/status?jobId=${encodeURIComponent(jobId)}`);
+    if (!st.ok) throw new Error(`status: ${st.status}`);
+    const js = await st.json(); // {status, downloadUrl?}
+    if (js.status === "done") {
+      step(5, "5/5: listo ✅");
+      return js.downloadUrl; // signed URL de descarga (Supabase)
+    }
+    if (js.status === "error") {
+      throw new Error(js.message || "Error en el procesamiento");
+    }
+    // pending/running → sigue
+  }
+}
+
 el("btn").addEventListener("click", async ()=>{
   const f = el("file").files[0];
-  if(!f){ alert("Selecciona un KMZ/KML"); return; }
+  if (!f) { alert("Selecciona un archivo KMZ o KML"); return; }
 
   el("btn").disabled = true;
-  el("status").textContent = "Subiendo y procesando…";
+  el("out").textContent = "";
+  el("status").textContent = "Preparando…";
+  el("bar").value = 0; el("bar").style.display = "block";
 
   try {
-    const fd = new FormData();
-    fd.append("file", f, f.name);
-
-    const rsp = await fetch(API_URL, {
-      method: "POST",
-      body: fd        // ← sin headers manuales
-    });
-
-    if(!rsp.ok){
-      const ct = rsp.headers.get("Content-Type") || "";
-      const txt = ct.includes("application/json") ? JSON.stringify(await rsp.json()).slice(0,500) : (await rsp.text()).slice(0,500);
-      throw new Error(`Error API ${rsp.status}: ${txt}`);
-    }
-
-    const blob = await rsp.blob();
-    const url = URL.createObjectURL(blob);
-    el("out").innerHTML = `<a download="Exportado.kmz" href="${url}">Descargar Exportado.kmz</a>`;
-    el("status").textContent = "Listo ✅";
+    const url = await subirYProcesar(f);
+    // Enlace de descarga final
+    el("out").innerHTML = `<a href="${url}" download="Exportado.kmz">Descargar Exportado.kmz</a>`;
   } catch (e) {
-    el("status").textContent = "Fallo: " + e.message;
+    el("status").textContent = "Fallo: " + (e?.message || e);
     el("out").textContent = "";
   } finally {
     el("btn").disabled = false;
   }
 });
 </script>
-
 
 </body>
 </html>
