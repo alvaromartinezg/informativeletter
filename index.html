@@ -31,16 +31,12 @@ document.getElementById("btn").addEventListener("click", async () => {
   status.textContent = "Solicitando URL firmada a AWS…";
 
   try {
-    const res = await fetch(API_URL, { method: "GET" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const js = await res.json();
-    if (!js.downloadUrl) throw new Error("La API no devolvió downloadUrl.");
+    const res = await fetch(API_URL);
+    const { downloadUrl } = await res.json();
+    
+    // 👉 Esto abre directamente la URL firmada, sin crear <a>
+    window.location.href = downloadUrl;
 
-    // Inicia descarga directa desde S3 (sin pasar por Lambda)
-    const a = document.createElement("a");
-    a.href = js.downloadUrl;
-    a.download = "Exportado.kmz"; // opcional: muchos navegadores respetan el nombre del objeto
-    a.click();
 
     status.textContent = "Descarga iniciada ✅ (URL válida por unos minutos)";
   } catch (err) {
