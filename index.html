@@ -3,107 +3,58 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KMZ Processor (asíncrono con Supabase)</title>
+<title>KMZ Test AWS</title>
 <style>
-  body { font-family: system-ui, Arial, sans-serif; max-width: 720px; margin: 40px auto; }
-  h1 { color: #0A6; }
-  .card { border: 1px solid #ddd; border-radius: 12px; padding: 16px; }
-  button { padding: 10px 16px; border-radius: 8px; border: 0; background:#0A6; color:#fff; cursor:pointer; }
-  button[disabled] { opacity:.6; cursor:not-allowed; }
-  .muted { color:#666; font-size: 0.95rem; }
-  .row { display:flex; gap:12px; align-items:center; margin-top:12px; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; }
-  progress { width: 100%; height: 10px; }
+  body { font-family: system-ui, Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+  h1 { color: #006644; }
+  button { background:#006644; color:white; border:0; padding:10px 18px; border-radius:8px; cursor:pointer; }
+  button[disabled] { opacity:0.6; cursor:not-allowed; }
+  .card { border:1px solid #ddd; padding:20px; border-radius:12px; }
 </style>
 </head>
 <body>
-  <h1>Procesar KMZ</h1>
+  <h1>Prueba de conexión AWS</h1>
   <div class="card">
-    <p class="muted">
-      Sube tu <strong>KMZ/KML</strong>. El archivo se envía a <em>Supabase Storage</em>, se procesa en segundo plano y
-      podrás descargar <code>Exportado.kmz</code> cuando termine.
-    </p>
-    <div class="row">
-      <input id="file" type="file" accept=".kmz,.kml" />
-      <button id="btn">Procesar</button>
-    </div>
-    <p id="status" class="muted" style="margin-top:10px;"></p>
-    <progress id="bar" max="5" value="0" style="margin-top:6px; display:none;"></progress>
-    <p id="out" class="mono" style="margin-top:10px;"></p>
+    <p>Presiona el botón para descargar el archivo <code>test.kmz</code> desde AWS S3 a través del backend Lambda.</p>
+    <button id="btn">Descargar desde AWS</button>
+    <p id="status" style="margin-top:10px;color:#555;"></p>
   </div>
 
 <script>
-const API_BASE = "https://ovqpaoa1ye.execute-api.us-east-2.amazonaws.com/prod";
+const API_URL = "###URL_DE_TU_API_GATEWAY###"; // ejemplo: https://abcd1234.execute-api.us-east-1.amazonaws.com/prod
 
-const el = (id)=>document.getElementById(id);
-const step = (n, txt)=>{
-  el("status").textContent = txt;
-  const bar = el("bar");
-  bar.style.display = "block";
-  bar.value = n; // 0..5
-};
-
-async function subirYProcesar(file) {
-  // 1) Pedir URL firmada de subida (Supabase)
-  step(1, "1/5: solicitando URL de subida…");
-  const pres = await fetch(`${API_BASE}/signed-url?filename=${encodeURIComponent(file.name)}`);
-  if (!pres.ok) throw new Error(`signed-url: ${pres.status}`);
-  const signed = await pres.json(); // { uploadUrl, path }
-
-  // 2) Subir el archivo a Supabase (PUT a la signed URL)
-  step(2, "2/5: subiendo archivo a Supabase…");
-  const up = await fetch(signed.uploadUrl, { method:"PUT", body:file });
-  if (!up.ok) throw new Error(`subida Supabase: ${up.status}`);
-
-  // 3) Iniciar job en el backend (SQS/Dynamo)
-  step(3, "3/5: iniciando procesamiento…");
-  const started = await fetch(`${API_BASE}/start`, {
-    method: "POST",
-    headers: { "Content-Type":"application/json" },
-    body: JSON.stringify({ path: signed.path })
-  });
-  if (!started.ok) throw new Error(`start: ${started.status}`);
-  const { jobId } = await started.json();
-
-  // 4) Polling de estado hasta terminar
-  step(4, "4/5: procesando… esto puede tardar (no cierres la pestaña).");
-  while (true) {
-    await new Promise(r => setTimeout(r, 5000)); // cada 5s
-    const st = await fetch(`${API_BASE}/status?jobId=${encodeURIComponent(jobId)}`);
-    if (!st.ok) throw new Error(`status: ${st.status}`);
-    const js = await st.json(); // {status, downloadUrl?}
-    if (js.status === "done") {
-      step(5, "5/5: listo ✅");
-      return js.downloadUrl; // signed URL de descarga (Supabase)
-    }
-    if (js.status === "error") {
-      throw new Error(js.message || "Error en el procesamiento");
-    }
-    // pending/running → sigue
-  }
-}
-
-el("btn").addEventListener("click", async ()=>{
-  const f = el("file").files[0];
-  if (!f) { alert("Selecciona un archivo KMZ o KML"); return; }
-
-  el("btn").disabled = true;
-  el("out").textContent = "";
-  el("status").textContent = "Preparando…";
-  el("bar").value = 0; el("bar").style.display = "block";
+document.getElementById("btn").addEventListener("click", async () => {
+  const btn = document.getElementById("btn");
+  const status = document.getElementById("status");
+  btn.disabled = true;
+  status.textContent = "Conectando a AWS Lambda…";
 
   try {
-    const url = await subirYProcesar(f);
-    // Enlace de descarga final
-    el("out").innerHTML = `<a href="${url}" download="Exportado.kmz">Descargar Exportado.kmz</a>`;
-  } catch (e) {
-    el("status").textContent = "Fallo: " + (e?.message || e);
-    el("out").textContent = "";
+    const res = await fetch(API_URL);
+    if (!res.ok) throw new Error("Respuesta no válida del servidor (" + res.status + ")");
+    const js = await res.json();
+
+    if (!js.body) throw new Error("No se recibió el cuerpo de datos.");
+
+    // Convertir Base64 a blob
+    const binary = atob(js.body);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "application/vnd.google-earth.kmz" });
+
+    // Crear enlace de descarga
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "Exportado.kmz";
+    a.click();
+
+    status.textContent = "Descarga completada ✅";
+  } catch (err) {
+    status.textContent = "Error: " + err.message;
   } finally {
-    el("btn").disabled = false;
+    btn.disabled = false;
   }
 });
 </script>
-
 </body>
 </html>
