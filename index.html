@@ -3,52 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KMZ Test AWS</title>
+<title>KMZ Downloader</title>
 <style>
-  body { font-family: system-ui, Arial, sans-serif; max-width: 600px; margin: 40px auto; }
+  body { font-family: system-ui, Arial, sans-serif; max-width: 640px; margin: 40px auto; text-align:center; }
   h1 { color: #006644; }
-  button { background:#006644; color:white; border:0; padding:10px 18px; border-radius:8px; cursor:pointer; }
-  button[disabled] { opacity:0.6; cursor:not-allowed; }
-  .card { border:1px solid #ddd; padding:20px; border-radius:12px; }
+  button {
+    background:#006644; color:white; border:0; padding:12px 22px;
+    border-radius:8px; cursor:pointer; font-size:1rem;
+  }
+  button[disabled] {opacity:.6; cursor:not-allowed;}
+  .muted { color:#555; }
 </style>
 </head>
 <body>
-  <h1>Prueba de conexión AWS</h1>
-  <div class="card">
-    <p>Presiona el botón para descargar el archivo <code>test.kmz</code> desde AWS S3 a través del backend Lambda.</p>
-    <button id="btn">Descargar desde AWS</button>
-    <p id="status" style="margin-top:10px;color:#555;"></p>
-  </div>
+  <h1>Descarga KMZ desde AWS</h1>
+  <p class="muted">Genera una URL temporal y descarga el archivo desde S3.</p>
+  <button id="btn">Descargar KMZ</button>
+  <p id="status" class="muted" style="margin-top:12px;"></p>
 
 <script>
-const API_URL = "###URL_DE_TU_API_GATEWAY###"; // ejemplo: https://abcd1234.execute-api.us-east-1.amazonaws.com/prod
+const API_URL = "https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com/download"; // ejemplo: https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com/download
 
 document.getElementById("btn").addEventListener("click", async () => {
   const btn = document.getElementById("btn");
   const status = document.getElementById("status");
   btn.disabled = true;
-  status.textContent = "Conectando a AWS Lambda…";
+  status.textContent = "Solicitando URL firmada a AWS…";
 
   try {
-    const res = await fetch(API_URL);
-    if (!res.ok) throw new Error("Respuesta no válida del servidor (" + res.status + ")");
+    const res = await fetch(API_URL, { method: "GET" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const js = await res.json();
+    if (!js.downloadUrl) throw new Error("La API no devolvió downloadUrl.");
 
-    if (!js.body) throw new Error("No se recibió el cuerpo de datos.");
-
-    // Convertir Base64 a blob
-    const binary = atob(js.body);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: "application/vnd.google-earth.kmz" });
-
-    // Crear enlace de descarga
+    // Inicia descarga directa desde S3 (sin pasar por Lambda)
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "Exportado.kmz";
+    a.href = js.downloadUrl;
+    a.download = "Exportado.kmz"; // opcional: muchos navegadores respetan el nombre del objeto
     a.click();
 
-    status.textContent = "Descarga completada ✅";
+    status.textContent = "Descarga iniciada ✅ (URL válida por unos minutos)";
   } catch (err) {
     status.textContent = "Error: " + err.message;
   } finally {
