@@ -1,50 +1,175 @@
 <!doctype html>
 <html lang="es">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KMZ Downloader</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KMZ Troubleshooter</title>
 <style>
-  body { font-family: system-ui, Arial, sans-serif; max-width: 640px; margin: 40px auto; text-align:center; }
-  h1 { color: #006644; }
-  button {
-    background:#006644; color:white; border:0; padding:12px 22px;
-    border-radius:8px; cursor:pointer; font-size:1rem;
-  }
-  button[disabled] {opacity:.6; cursor:not-allowed;}
-  .muted { color:#555; }
+  :root { --brand:#0a6; --muted:#666; }
+  body { font-family: system-ui, Arial, sans-serif; max-width: 820px; margin: 28px auto; padding: 0 12px; }
+  h1 { color: var(--brand); margin-bottom: 6px; }
+  .muted { color: var(--muted); }
+  .card { border:1px solid #e3e3e3; border-radius:12px; padding:16px; margin:14px 0; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  button { background:var(--brand); color:#fff; border:0; padding:10px 16px; border-radius:8px; cursor:pointer; }
+  button[disabled]{ opacity:.6; cursor:not-allowed; }
+  input[type=file]{ padding:8px; border:1px solid #ddd; border-radius:8px; }
+  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  progress { width:100%; height: 10px; display:none; }
+  .ok { color:#0b7; }
+  .err { color:#c00; }
+  details > summary { cursor:pointer; }
+  .small { font-size: .92rem; }
+  .pill { background:#f4f4f4; border-radius:999px; padding:4px 8px; }
 </style>
 </head>
 <body>
-  <h1>Descarga KMZ desde AWS</h1>
-  <p class="muted">Genera una URL temporal y descarga el archivo desde S3.</p>
-  <button id="btn">Descargar KMZ</button>
-  <p id="status" class="muted" style="margin-top:12px;"></p>
+  <h1>KMZ Troubleshooter</h1>
+  <p class="muted">Sube un <b>.kmz/.kml</b>, crea un job, consulta estado y descarga el resultado. Incluye logs para diagnóstico.</p>
+
+  <div class="card">
+    <div class="row">
+      <input id="file" type="file" accept=".kmz,.kml" />
+      <button id="btnStart">Subir y procesar</button>
+      <button id="btnCancel" disabled>Cancelar</button>
+    </div>
+    <p id="status" class="muted small" style="margin:10px 0 4px;"></p>
+    <progress id="bar" max="5" value="0"></progress>
+    <p id="job" class="mono small" style="margin:8px 0;"></p>
+    <div class="row">
+      <input id="jobInput" class="mono" placeholder="Pegar jobId para consultar…" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:8px;" />
+      <button id="btnStatus">Consultar estado</button>
+    </div>
+    <p id="result" class="mono small"></p>
+  </div>
+
+  <div class="card">
+    <details open>
+      <summary class="pill">Ver logs</summary>
+      <pre id="log" class="mono small" style="white-space:pre-wrap;"></pre>
+    </details>
+  </div>
 
 <script>
-const API_URL = "https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com/download"; // ejemplo: https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com/download
+const API_BASE = "https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com"; // <-- tu HTTP API
+const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const POLL_MS  = 4000;
+let abortFlag = false;
+let pollTimer = null;
 
-document.getElementById("btn").addEventListener("click", async () => {
-  const btn = document.getElementById("btn");
-  const status = document.getElementById("status");
-  btn.disabled = true;
-  status.textContent = "Solicitando URL firmada a AWS…";
+const el = (id)=>document.getElementById(id);
+const log = (...a)=>{ el("log").textContent += a.join(" ") + "\n"; };
+const setStep = (n, txt)=>{ const bar=el("bar"); bar.style.display="block"; bar.value=n; el("status").textContent = txt; };
+
+// ----- flujo principal -----
+el("btnStart").addEventListener("click", async ()=>{
+  const f = el("file").files[0];
+  if (!f) { alert("Selecciona un archivo .kmz/.kml"); return; }
+  if (!/\.kmz$|\.kml$/i.test(f.name)) { alert("Debe ser .kmz o .kml"); return; }
+  if (f.size > MAX_SIZE) { alert(`Archivo supera ${Math.round(MAX_SIZE/1024/1024)} MB`); return; }
+
+  abortFlag = false; el("btnCancel").disabled = false;
+  el("result").textContent = ""; el("job").textContent = "";
+  el("log").textContent = ""; setStep(0, "Preparando…");
 
   try {
-    const res = await fetch(API_URL);
-    const { downloadUrl } = await res.json();
-    
-    // 👉 Esto abre directamente la URL firmada, sin crear <a>
-    window.location.href = downloadUrl;
+    // 1) pedir presigned POST
+    setStep(1, "1/5: solicitando firma /signed-post …");
+    const spRes = await fetch(`${API_BASE}/signed-post?filename=${encodeURIComponent(f.name)}`);
+    const sp = await spRes.json();
+    log("signed-post:", JSON.stringify(sp, null, 2));
 
+    if (!sp?.url || !sp?.fields?.key) throw new Error("Respuesta inválida de /signed-post");
 
-    status.textContent = "Descarga iniciada ✅ (URL válida por unos minutos)";
-  } catch (err) {
-    status.textContent = "Error: " + err.message;
+    // 2) subir a S3
+    setStep(2, "2/5: subiendo archivo a S3 …");
+    const fd = new FormData();
+    for (const [k,v] of Object.entries(sp.fields)) fd.append(k, v);
+    fd.append("file", f);
+    const upRes = await fetch(sp.url, { method: "POST", body: fd });
+    if (!upRes.ok) throw new Error(`Falló subida S3: HTTP ${upRes.status}`);
+    log("upload: HTTP", upRes.status);
+
+    if (abortFlag) throw new Error("Cancelado por el usuario");
+
+    // 3) iniciar job
+    setStep(3, "3/5: creando job /start …");
+    const stRes = await fetch(`${API_BASE}/start`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ key: sp.fields.key })
+    });
+    const st = await stRes.json();
+    log("start:", JSON.stringify(st, null, 2));
+    if (!st?.jobId) throw new Error("La API /start no devolvió jobId");
+
+    el("job").textContent = `jobId: ${st.jobId}`;
+    el("jobInput").value = st.jobId;
+
+    // 4) polling de estado
+    setStep(4, "4/5: procesando… (consultando /status)");
+    await pollStatus(st.jobId, true);
+
+  } catch (e) {
+    el("status").innerHTML = `<span class="err">ERROR:</span> ${e.message || e}`;
+    log("ERROR:", e?.stack || e);
   } finally {
-    btn.disabled = false;
+    setStep(5, "Listo.");
+    el("btnCancel").disabled = true;
+    abortFlag = false;
   }
 });
+
+el("btnCancel").addEventListener("click", ()=>{
+  abortFlag = true;
+  if (pollTimer) clearTimeout(pollTimer);
+  el("btnCancel").disabled = true;
+  el("status").textContent = "Cancelado por el usuario.";
+  log("### Usuario canceló.");
+});
+
+el("btnStatus").addEventListener("click", async ()=>{
+  const id = el("jobInput").value.trim();
+  if (!id) { alert("Pega un jobId"); return; }
+  await pollStatus(id, false);
+});
+
+async function pollStatus(jobId, auto) {
+  if (pollTimer) clearTimeout(pollTimer);
+
+  try {
+    const url = `${API_BASE}/status?jobId=${encodeURIComponent(jobId)}`;
+    const res = await fetch(url);
+    const js  = await res.json();
+    log("status:", JSON.stringify(js, null, 2));
+
+    if (js.error) {
+      el("result").textContent = "";
+      el("status").innerHTML = `<span class="err">Estado:</span> ${js.error}`;
+      return;
+    }
+
+    if (js.status === "DONE" && js.downloadUrl) {
+      el("status").innerHTML = `<span class="ok">5/5: listo ✅</span>`;
+      el("result").innerHTML = `<a class="mono" href="${js.downloadUrl}" download="Area_impacto.kmz">Descargar Area_impacto.kmz</a>`;
+      return;
+    }
+
+    if (js.status === "ERROR") {
+      el("status").innerHTML = `<span class="err">Job con error</span>`;
+      el("result").textContent = js.message || "(sin detalle)";
+      return;
+    }
+
+    // pending / running
+    el("status").textContent = `Estado: ${js.status || "desconocido"}…`;
+    if (auto && !abortFlag) pollTimer = setTimeout(()=>pollStatus(jobId, true), POLL_MS);
+
+  } catch (e) {
+    el("status").innerHTML = `<span class="err">Error consultando /status:</span> ${e.message}`;
+    log("status ERROR:", e?.stack || e);
+  }
+}
 </script>
 </body>
 </html>
