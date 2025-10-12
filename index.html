@@ -1,175 +1,165 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>KMZ Troubleshooter</title>
+<title>Extractor for Letters</title>
 <style>
-  :root { --brand:#0a6; --muted:#666; }
-  body { font-family: system-ui, Arial, sans-serif; max-width: 820px; margin: 28px auto; padding: 0 12px; }
-  h1 { color: var(--brand); margin-bottom: 6px; }
-  .muted { color: var(--muted); }
-  .card { border:1px solid #e3e3e3; border-radius:12px; padding:16px; margin:14px 0; }
-  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  button { background:var(--brand); color:#fff; border:0; padding:10px 16px; border-radius:8px; cursor:pointer; }
-  button[disabled]{ opacity:.6; cursor:not-allowed; }
-  input[type=file]{ padding:8px; border:1px solid #ddd; border-radius:8px; }
-  code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-  progress { width:100%; height: 10px; display:none; }
-  .ok { color:#0b7; }
-  .err { color:#c00; }
-  details > summary { cursor:pointer; }
-  .small { font-size: .92rem; }
-  .pill { background:#f4f4f4; border-radius:999px; padding:4px 8px; }
+  :root { --primary:#0b57d0; --muted:#667085; --bg:#f7f7fb; }
+  body { font-family: system-ui, Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 16px; }
+  h1 { margin: 0 0 8px; }
+  .card { background:#fff; border:1px solid #e6e8eb; border-radius: 14px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.03) }
+  .row { display:flex; gap: 12px; align-items:center; flex-wrap:wrap; }
+  input[type="file"]{ max-width:100% }
+  button { padding:10px 14px; border-radius:10px; border:0; cursor:pointer }
+  .primary { background:var(--primary); color:#fff }
+  .ghost { background:#eef3ff; color:#0b57d0 }
+  .danger { background:#ef4444; color:#fff }
+  .muted { color: var(--muted); font-size: 14px }
+  .mt8 { margin-top:8px }
+  .progress { position:relative; height:12px; background:#eef0f3; border-radius:999px; overflow:hidden }
+  .bar { height:100%; width:0%; background:var(--primary); transition: width .15s ease }
+  .bar.indeterminate { position: absolute; width:40%; left:-40%; animation: ind 1.2s infinite linear; }
+  @keyframes ind { from { left:-40% } to { left:100% } }
+  pre { background: #fbfbfd; border:1px solid #eee; border-radius:10px; padding:10px; overflow:auto }
 </style>
 </head>
 <body>
-  <h1>KMZ Troubleshooter</h1>
-  <p class="muted">Sube un <b>.kmz/.kml</b>, crea un job, consulta estado y descarga el resultado. Incluye logs para diagnóstico.</p>
+  <h1>KMZ Processor</h1>
+  <p class="muted">Sube tu un archivo KMZ/KML con poligonos o lineas y se exportará el área de impacto en KMZ para responder cartas informativas</p>
 
   <div class="card">
     <div class="row">
       <input id="file" type="file" accept=".kmz,.kml" />
-      <button id="btnStart">Subir y procesar</button>
-      <button id="btnCancel" disabled>Cancelar</button>
+      <button id="btn" class="primary">Procesar</button>
+      <button id="cancel" class="danger" disabled>Cancelar</button>
     </div>
-    <p id="status" class="muted small" style="margin:10px 0 4px;"></p>
-    <progress id="bar" max="5" value="0"></progress>
-    <p id="job" class="mono small" style="margin:8px 0;"></p>
-    <div class="row">
-      <input id="jobInput" class="mono" placeholder="Pegar jobId para consultar…" style="flex:1; padding:8px; border:1px solid #ddd; border-radius:8px;" />
-      <button id="btnStatus">Consultar estado</button>
-    </div>
-    <p id="result" class="mono small"></p>
-  </div>
 
-  <div class="card">
-    <details open>
-      <summary class="pill">Ver logs</summary>
-      <pre id="log" class="mono small" style="white-space:pre-wrap;"></pre>
-    </details>
+    <!-- Progreso de subida -->
+    <div class="mt8">Subiendo: <span id="upPct">0%</span></div>
+    <div class="progress"><div id="upBar" class="bar"></div></div>
+
+    <!-- Progreso de procesamiento (indeterminado) -->
+    <div class="mt8">Procesando en servidor:</div>
+    <div class="progress"><div id="procBar" class="bar indeterminate"></div></div>
+
+    <!-- Progreso de descarga -->
+    <div class="mt8">Descargando: <span id="downPct">0%</span></div>
+    <div class="progress"><div id="downBar" class="bar"></div></div>
+
+    <div id="status" class="muted mt8"></div>
+    <pre id="log" class="mt8" style="display:none"></pre>
   </div>
 
 <script>
-const API_BASE = "https://1h7d4k0mcj.execute-api.us-east-2.amazonaws.com"; // <-- tu HTTP API
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
-const POLL_MS  = 4000;
-let abortFlag = false;
-let pollTimer = null;
+const RUN_URL = "https://kmz-processor-411960240345.us-central1.run.app";
 
-const el = (id)=>document.getElementById(id);
-const log = (...a)=>{ el("log").textContent += a.join(" ") + "\n"; };
-const setStep = (n, txt)=>{ const bar=el("bar"); bar.style.display="block"; bar.value=n; el("status").textContent = txt; };
+const $file = document.getElementById("file");
+const $btn = document.getElementById("btn");
+const $cancel = document.getElementById("cancel");
+const $status = document.getElementById("status");
+const $log = document.getElementById("log");
+const upBar = document.getElementById("upBar");
+const procBar = document.getElementById("procBar");
+const downBar = document.getElementById("downBar");
+const upPct = document.getElementById("upPct");
+const downPct = document.getElementById("downPct");
 
-// ----- flujo principal -----
-el("btnStart").addEventListener("click", async ()=>{
-  const f = el("file").files[0];
-  if (!f) { alert("Selecciona un archivo .kmz/.kml"); return; }
-  if (!/\.kmz$|\.kml$/i.test(f.name)) { alert("Debe ser .kmz o .kml"); return; }
-  if (f.size > MAX_SIZE) { alert(`Archivo supera ${Math.round(MAX_SIZE/1024/1024)} MB`); return; }
+let xhr = null;
 
-  abortFlag = false; el("btnCancel").disabled = false;
-  el("result").textContent = ""; el("job").textContent = "";
-  el("log").textContent = ""; setStep(0, "Preparando…");
+function resetBars(){
+  upBar.style.width = "0%"; upPct.textContent="0%";
+  downBar.style.width = "0%"; downPct.textContent="0%";
+  // Procesamiento indeterminado apagado por defecto; lo encendemos al empezar
+  procBar.style.display = "none";
+}
+resetBars();
 
-  try {
-    // 1) pedir presigned POST
-    setStep(1, "1/5: solicitando firma /signed-post …");
-    const spRes = await fetch(`${API_BASE}/signed-post?filename=${encodeURIComponent(f.name)}`);
-    const sp = await spRes.json();
-    log("signed-post:", JSON.stringify(sp, null, 2));
-
-    if (!sp?.url || !sp?.fields?.key) throw new Error("Respuesta inválida de /signed-post");
-
-    // 2) subir a S3
-    setStep(2, "2/5: subiendo archivo a S3 …");
-    const fd = new FormData();
-    for (const [k,v] of Object.entries(sp.fields)) fd.append(k, v);
-    fd.append("file", f);
-    const upRes = await fetch(sp.url, { method: "POST", body: fd });
-    if (!upRes.ok) throw new Error(`Falló subida S3: HTTP ${upRes.status}`);
-    log("upload: HTTP", upRes.status);
-
-    if (abortFlag) throw new Error("Cancelado por el usuario");
-
-    // 3) iniciar job
-    setStep(3, "3/5: creando job /start …");
-    const stRes = await fetch(`${API_BASE}/start`, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ key: sp.fields.key })
-    });
-    const st = await stRes.json();
-    log("start:", JSON.stringify(st, null, 2));
-    if (!st?.jobId) throw new Error("La API /start no devolvió jobId");
-
-    el("job").textContent = `jobId: ${st.jobId}`;
-    el("jobInput").value = st.jobId;
-
-    // 4) polling de estado
-    setStep(4, "4/5: procesando… (consultando /status)");
-    await pollStatus(st.jobId, true);
-
-  } catch (e) {
-    el("status").innerHTML = `<span class="err">ERROR:</span> ${e.message || e}`;
-    log("ERROR:", e?.stack || e);
-  } finally {
-    setStep(5, "Listo.");
-    el("btnCancel").disabled = true;
-    abortFlag = false;
-  }
-});
-
-el("btnCancel").addEventListener("click", ()=>{
-  abortFlag = true;
-  if (pollTimer) clearTimeout(pollTimer);
-  el("btnCancel").disabled = true;
-  el("status").textContent = "Cancelado por el usuario.";
-  log("### Usuario canceló.");
-});
-
-el("btnStatus").addEventListener("click", async ()=>{
-  const id = el("jobInput").value.trim();
-  if (!id) { alert("Pega un jobId"); return; }
-  await pollStatus(id, false);
-});
-
-async function pollStatus(jobId, auto) {
-  if (pollTimer) clearTimeout(pollTimer);
-
-  try {
-    const url = `${API_BASE}/status?jobId=${encodeURIComponent(jobId)}`;
-    const res = await fetch(url);
-    const js  = await res.json();
-    log("status:", JSON.stringify(js, null, 2));
-
-    if (js.error) {
-      el("result").textContent = "";
-      el("status").innerHTML = `<span class="err">Estado:</span> ${js.error}`;
-      return;
-    }
-
-    if (js.status === "DONE" && js.downloadUrl) {
-      el("status").innerHTML = `<span class="ok">5/5: listo ✅</span>`;
-      el("result").innerHTML = `<a class="mono" href="${js.downloadUrl}" download="Area_impacto.kmz">Descargar Area_impacto.kmz</a>`;
-      return;
-    }
-
-    if (js.status === "ERROR") {
-      el("status").innerHTML = `<span class="err">Job con error</span>`;
-      el("result").textContent = js.message || "(sin detalle)";
-      return;
-    }
-
-    // pending / running
-    el("status").textContent = `Estado: ${js.status || "desconocido"}…`;
-    if (auto && !abortFlag) pollTimer = setTimeout(()=>pollStatus(jobId, true), POLL_MS);
-
-  } catch (e) {
-    el("status").innerHTML = `<span class="err">Error consultando /status:</span> ${e.message}`;
-    log("status ERROR:", e?.stack || e);
+function setStatus(msg){ $status.textContent = msg; }
+function setError(msg, details=""){
+  $status.textContent = "❌ " + msg;
+  if(details){
+    $log.style.display = "block";
+    $log.textContent = details;
   }
 }
+
+$cancel.onclick = () => { if (xhr) { xhr.abort(); setStatus("Operación cancelada."); $cancel.disabled = true; $btn.disabled = false; } };
+
+$btn.onclick = () => {
+  const f = $file.files[0];
+  if(!f){ alert("Selecciona un archivo .kmz o .kml"); return; }
+  if(!/\.(kmz|kml)$/i.test(f.name)){ alert("Archivo inválido"); return; }
+
+  // preparar UI
+  $btn.disabled = true; $cancel.disabled = true; $log.style.display = "none"; $log.textContent = "";
+  resetBars(); setStatus("Preparando…");
+
+  // FormData
+  const fd = new FormData();
+  fd.append("test_kmz", f, f.name);
+
+  xhr = new XMLHttpRequest();
+  xhr.open("POST", `${RUN_URL.replace(/\/+$/,'')}/process`);
+  xhr.responseType = "blob";
+
+  // --- progreso de subida
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      upBar.style.width = `${pct}%`; upPct.textContent = `${pct}%`;
+    }
+  };
+
+  xhr.onloadstart = () => {
+    // cuando la subida termina y empieza la espera en servidor
+    procBar.style.display = "block"; // indeterminado visible
+    $cancel.disabled = false;
+    setStatus("Procesando en servidor…");
+  };
+
+  // --- progreso de descarga (si hay Content-Length)
+  xhr.onprogress = (e) => {
+    if (e.lengthComputable) {
+      const pct = Math.round((e.loaded / e.total) * 100);
+      downBar.style.width = `${pct}%`; downPct.textContent = `${pct}%`;
+    }
+  };
+
+  xhr.onerror = () => setError("Error de red (fetch/XHR). ¿CORS? ¿conexión?");
+  xhr.onabort = () => setStatus("Operación cancelada por el usuario.");
+  xhr.onreadystatechange = () => {
+    // si el servidor envía error 4xx/5xx, leer texto y mostrar log
+    if (xhr.readyState === 4) {
+      $cancel.disabled = true; $btn.disabled = false; procBar.style.display = "none";
+      if (xhr.status >= 200 && xhr.status < 300) {
+        // Descargar blob
+        let filename = "Exportado.kmz";
+        try {
+          const cd = xhr.getResponseHeader("Content-Disposition") || "";
+          const m = cd.match(/filename="?([^"]+)"?/i);
+          if (m) filename = m[1];
+        } catch {}
+        const blob = xhr.response;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        setStatus("✅ Listo. Archivo descargado.");
+        downBar.style.width = "100%"; downPct.textContent = "100%";
+      } else {
+        // Intentar leer el cuerpo como texto (el backend envía logs en el body)
+        const reader = new FileReader();
+        reader.onload = () => setError(`HTTP ${xhr.status} ${xhr.statusText}`, reader.result || "");
+        reader.onerror = () => setError(`HTTP ${xhr.status} ${xhr.statusText}`);
+        try { reader.readAsText(xhr.response); } catch { setError(`HTTP ${xhr.status} ${xhr.statusText}`); }
+      }
+    }
+  };
+
+  xhr.send(fd);
+};
 </script>
 </body>
 </html>
