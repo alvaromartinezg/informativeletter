@@ -545,11 +545,11 @@ $btnConvert.onclick = async () => {
     return;
   }
 
-  const out = $convFormat.value; // both | pdf | dwg
+  const out = $convFormat.value; // both | pdf | dxf
 
   try{
-    showOverlay("Convirtiendo a PDF/DWG…");
-    setStatus("Convirtiendo a PDF/DWG…");
+    showOverlay("Generando CAD…");
+    setStatus("Generando CAD…");
 
     const fd = new FormData();
     fd.append("file", blobToSend, nameToSend);
