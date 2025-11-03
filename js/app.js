@@ -344,6 +344,85 @@ async function loadUbigeoRows() {
   }
 }
 
+--Helper para agregar funcion de ubigeo al boton conver pdf--
+// === Helper: si no hay resultado previo (lastBlob), intenta obtener __geoAdmin desde el archivo elegido ===
+async function ensureGeoFromFileIfNeeded(fileLike) {
+  // Si ya hay geoAdmin (de alguna corrida previa), no hacemos nada
+  if (window.__geoAdmin && (window.__geoAdmin.ubigeo || "").trim()) return;
+
+  // Solo intentamos si NO existe lastBlob (o sea, no se usó "Procesar" con éxito antes)
+  if (lastBlob) return;
+
+  if (!fileLike) return; // nada que leer
+
+  // 1) Extraer primera lon/lat del archivo aportado (KMZ o KML)
+  let pointLonLat = null;
+  try {
+    showOverlay("Leyendo archivo para ubicar distrito…");
+    let kmlText;
+    const name = fileLike.name || "";
+    if (/\.(kmz)$/i.test(name)) {
+      const zip = await JSZip.loadAsync(fileLike);
+      const kmlFile = zip.file(/(^|\/)doc\.kml$/i)[0] || zip.file(/\.kml$/i)[0];
+      if (!kmlFile) throw new Error("KMZ sin .kml interno");
+      kmlText = await kmlFile.async("string");
+    } else if (/\.(kml)$/i.test(name)) {
+      kmlText = await fileLike.text();
+    } else {
+      // Si el usuario sube otra cosa, no bloqueamos la conversión
+      hideOverlay();
+      return;
+    }
+    const userXML = new DOMParser().parseFromString(kmlText, "application/xml");
+    pointLonLat = getFirstLonLatFromKml(userXML); // [lon, lat]
+  } catch (e) {
+    console.warn("No se pudo leer lon/lat para geoAdmin:", e);
+    hideOverlay();
+    return; // sigue sin geoAdmin, pero no detenemos la conversión
+  }
+
+  // 2) Cargar Districts.KMZ y resolver UBIGEO
+  let ubigeo = null;
+  try {
+    const districtsXML = await loadDistrictsXML();
+    showOverlay("Comparando punto con distritos…");
+    ubigeo = findUbigeoForPointInDistrictsXML(districtsXML, pointLonLat);
+  } catch (e) {
+    console.warn("No se pudo resolver UBIGEO:", e);
+    hideOverlay();
+    return;
+  }
+
+  // 3) Cargar UBIGEO.xlsx y buscar fila
+  try {
+    showOverlay("Cargando UBIGEO.xlsx…");
+    const rows = await loadUbigeoRows();
+    const match = lookupUbigeo(rows, ubigeo);
+
+    // Guarda en window.__geoAdmin (igual que en 'Procesar')
+    if (match) {
+      window.__geoAdmin = {
+        ubigeo: match.ubigeo,
+        departamento: match.departamento || "",
+        provincia: match.provincia || "",
+        distrito: match.distrito || ""
+      };
+    } else {
+      window.__geoAdmin = {
+        ubigeo: (ubigeo || "").toString().padStart(6, "0"),
+        departamento: "",
+        provincia: "",
+        distrito: ""
+      };
+    }
+  } catch (e) {
+    console.warn("No se pudo hacer lookup en UBIGEO.xlsx:", e);
+  } finally {
+    hideOverlay();
+  }
+}
+
+
 // Busca fila por ubigeo (columna A) y devuelve objeto {ubigeo, departamento, provincia, distrito}
 function lookupUbigeo(rows, ubigeo) {
   if (!rows || !rows.length) return null;
@@ -546,6 +625,13 @@ $btnConvert.onclick = async () => {
   }
 
   const out = $convFormat.value; // both | pdf | dxf
+  try {
+    if (!lastBlob) {
+      await ensureGeoFromFileIfNeeded(blobToSend);
+    }
+  } catch (e) {
+    console.warn("ensureGeoFromFileIfNeeded falló (se continúa sin geoAdmin):", e);
+  }
 
   try{
     showOverlay("Generando CAD…");
