@@ -344,7 +344,7 @@ async function loadUbigeoRows() {
   }
 }
 
---Helper para agregar funcion de ubigeo al boton conver pdf--
+// Helper para agregar funcion de ubigeo al boton conver pdf//
 // === Helper: si no hay resultado previo (lastBlob), intenta obtener __geoAdmin desde el archivo elegido ===
 async function ensureGeoFromFileIfNeeded(fileLike) {
   // Si ya hay geoAdmin (de alguna corrida previa), no hacemos nada
