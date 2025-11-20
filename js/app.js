@@ -4,7 +4,6 @@ const $btn    = document.getElementById("btn");
 const $cancel = document.getElementById("cancel");
 const $status = document.getElementById("status");
 const $log    = document.getElementById("log");
-
 const upBar  = document.getElementById("upBar");
 const procBar= document.getElementById("procBar");
 const downBar= document.getElementById("downBar");
