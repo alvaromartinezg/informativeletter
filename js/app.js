@@ -541,6 +541,7 @@ if (match) {
   fd.append("test_kmz", f, f.name);
 
   xhr = new XMLHttpRequest();
+  xhr.timeout = 300000; // 5 minutos
   xhr.open("POST", PROCESS_URL);
   xhr.responseType = "blob";
 
