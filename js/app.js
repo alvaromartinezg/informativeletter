@@ -4,7 +4,6 @@ const $btn    = document.getElementById("btn");
 const $cancel = document.getElementById("cancel");
 const $status = document.getElementById("status");
 const $log    = document.getElementById("log");
-
 const upBar  = document.getElementById("upBar");
 const procBar= document.getElementById("procBar");
 const downBar= document.getElementById("downBar");
@@ -373,6 +372,7 @@ async function ensureGeoFromFileIfNeeded(fileLike) {
       hideOverlay();
       return;
     }
+    kmlText = sanitizeKmlXml(kmlText);
     const userXML = new DOMParser().parseFromString(kmlText, "application/xml");
     pointLonLat = getFirstLonLatFromKml(userXML); // [lon, lat]
   } catch (e) {
@@ -443,6 +443,17 @@ function lookupUbigeo(rows, ubigeo) {
   return null;
 }
 
+function sanitizeKmlXml(kmlText) {
+  // Si el texto usa el prefijo xsi: pero no tiene xmlns:xsi declarado, lo agregamos en <kml ...>
+  if (/xsi:/.test(kmlText) && !/xmlns:xsi=/.test(kmlText)) {
+    kmlText = kmlText.replace(
+      /<kml([^>]*?)>/i,
+      '<kml$1 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">'
+    );
+  }
+  return kmlText;
+}
+
 // ======= PROCESAR (POST /process) =======
 $btn.onclick = async () => {
   let f = $file.files[0];
@@ -462,6 +473,7 @@ $btn.onclick = async () => {
     } else {
       userKmlText = await f.text();
     }
+    userKmlText = sanitizeKmlXml(userKmlText);
     const userXML = new DOMParser().parseFromString(userKmlText, "application/xml");
     pointLonLat = getFirstLonLatFromKml(userXML); // [lon, lat]
   } catch (e) {
