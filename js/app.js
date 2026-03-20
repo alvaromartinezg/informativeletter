@@ -774,3 +774,32 @@ $btnConvert.onclick = async () => {
     hideOverlay();
   }
 };
+
+// ===== MODAL MAPA =====
+const btnMap = document.getElementById("btnMap");
+const modal = document.getElementById("mapModal");
+const closeMap = document.getElementById("closeMap");
+
+if (btnMap && modal && closeMap) {
+  btnMap.addEventListener("click", () => {
+    modal.style.display = "block";
+
+    // IMPORTANTE: refrescar mapa
+    setTimeout(() => {
+      if (window.BitelKmzMap && window.BitelKmzMap.init) {
+        window.BitelKmzMap.init();
+      }
+    }, 100);
+  });
+
+  closeMap.addEventListener("click", () => {
+    modal.style.display = "none";
+  });
+
+  // cerrar clic fuera
+  window.addEventListener("click", (e) => {
+    if (e.target === modal) {
+      modal.style.display = "none";
+    }
+  });
+}
