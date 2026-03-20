@@ -781,22 +781,38 @@ const modal = document.getElementById("mapModal");
 const closeMap = document.getElementById("closeMap");
 
 if (btnMap && modal && closeMap) {
-  btnMap.addEventListener("click", () => {
+  btnMap.addEventListener("click", async () => {
+    const f = $file.files[0];
+
     modal.style.display = "block";
 
-    // IMPORTANTE: refrescar mapa
-    setTimeout(() => {
+    try {
       if (window.BitelKmzMap && window.BitelKmzMap.init) {
         window.BitelKmzMap.init();
       }
-    }, 100);
+
+      setTimeout(async () => {
+        try {
+          if (window.BitelKmzMap && window.BitelKmzMap.resize) {
+            window.BitelKmzMap.resize();
+          }
+
+          if (f && window.BitelKmzMap && window.BitelKmzMap.loadFile) {
+            await window.BitelKmzMap.loadFile(f);
+          }
+        } catch (err) {
+          console.error("Error cargando mapa:", err);
+        }
+      }, 250);
+    } catch (err) {
+      console.error("Error abriendo modal del mapa:", err);
+    }
   });
 
   closeMap.addEventListener("click", () => {
     modal.style.display = "none";
   });
 
-  // cerrar clic fuera
   window.addEventListener("click", (e) => {
     if (e.target === modal) {
       modal.style.display = "none";
