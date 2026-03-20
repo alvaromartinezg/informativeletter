@@ -615,7 +615,7 @@ if (match) {
       
                 // Caso especial: backend procesó bien pero no encontró resultados
                 if (txt.includes("[EMPTY]")) {
-                  setStatus("⚠️ No encontró nada.");
+                  setStatus("⚠️ No se encontró infraestructura de fibra optica de BITEL en el área de impacto solicitada.");
                   $log.style.display = "none";
                   $log.textContent = "";
       
