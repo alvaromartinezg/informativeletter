@@ -506,29 +506,18 @@
   // -----------------------------
   // Enlace automático con input #file
   // -----------------------------
-  function bindMainFileInput() {
-    const input = $(CONFIG.mainFileInputId);
-    if (!input) {
-      logWarn(`No se encontró el input #${CONFIG.mainFileInputId}.`);
-      return;
-    }
-
-    input.addEventListener("change", async function (ev) {
-      const file = ev.target?.files?.[0];
-      if (!file) return;
-
-      clearLog();
-
-      try {
-        initMap();
-        await loadFileToMap(file);
-      } catch (error) {
-        logError(error);
-        setStatusText(`Error al cargar archivo: ${error.message}`);
-        appendLog(`ERROR: ${error.message}`);
-      }
-    });
-  }
+   function bindMainFileInput() {
+     const input = $(CONFIG.mainFileInputId);
+     if (!input) {
+       logWarn(`No se encontró el input #${CONFIG.mainFileInputId}.`);
+       return;
+     }
+   
+     input.addEventListener("change", function () {
+       clearLog();
+       setStatusText("Archivo listo para visualizar. Haz clic en 'Ver mapa'.");
+     });
+   }
 
   // -----------------------------
   // API pública opcional
