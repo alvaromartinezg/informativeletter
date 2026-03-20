@@ -607,12 +607,40 @@ if (match) {
         // Guardar en memoria (Blob) para la conversión
         lastBlob = blob; 
         lastName = filename;
-      } else {
-        const reader = new FileReader();
-        reader.onload = () => setError(`HTTP ${xhr.status} ${xhr.statusText}`, reader.result || "");
-        reader.onerror = () => setError(`HTTP ${xhr.status} ${xhr.statusText}`);
-        try { reader.readAsText(xhr.response); } catch { setError(`HTTP ${xhr.status} ${xhr.statusText}`); }
-      }
+            } else {
+              const reader = new FileReader();
+      
+              reader.onload = () => {
+                const txt = String(reader.result || "");
+      
+                // Caso especial: backend procesó bien pero no encontró resultados
+                if (txt.includes("[EMPTY]")) {
+                  setStatus("⚠️ No encontró nada.");
+                  $log.style.display = "none";
+                  $log.textContent = "";
+      
+                  downBar.style.width = "0%";
+                  downPct.textContent = "0%";
+      
+                  // Evitar reutilizar un archivo previo
+                  lastBlob = null;
+                  lastName = null;
+                  return;
+                }
+      
+                setError(`HTTP ${xhr.status} ${xhr.statusText}`, txt);
+              };
+      
+              reader.onerror = () => {
+                setError(`HTTP ${xhr.status} ${xhr.statusText}`);
+              };
+      
+              try {
+                reader.readAsText(xhr.response);
+              } catch {
+                setError(`HTTP ${xhr.status} ${xhr.statusText}`);
+              }
+            }
     }
   };
 
