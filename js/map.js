@@ -533,12 +533,23 @@
   // -----------------------------
   // API pública opcional
   // -----------------------------
-  window.BitelKmzMap = {
-    init: initMap,
-    clear: clearUploadedLayer,
-    loadFile: loadFileToMap,
-    renderGeoJson: renderGeoJson
-  };
+   window.BitelKmzMap = {
+     init: initMap,
+     clear: clearUploadedLayer,
+     loadFile: loadFileToMap,
+     renderGeoJson: renderGeoJson,
+     resize: function () {
+       if (map) {
+         map.invalidateSize();
+         if (uploadedLayer) {
+           const bounds = uploadedLayer.getBounds();
+           if (bounds && bounds.isValid()) {
+             map.fitBounds(bounds, { padding: CONFIG.fitPadding });
+           }
+         }
+       }
+     }
+   };
 
   // -----------------------------
   // Inicio automático
