@@ -4,7 +4,7 @@
    Requisitos globales que luego pondremos en el HTML:
    - Leaflet (window.L)
    - JSZip (window.JSZip)
-   - toGeoJSON (window.toGeoJSON)
+   - toGeoJSON (window.toGeoJSON)f
    - Un contenedor <div id="map"></div>
    - Un input file con id="file" (ya lo tienes)
    ========================================================= */
@@ -52,17 +52,13 @@
     console.error("[map.js]", ...args);
   }
 
-  function setStatusText(msg) {
-    const el = $("status");
-    if (el) el.textContent = msg;
-  }
-
-  function appendLog(msg) {
-    const el = $("log");
-    if (!el) return;
-    el.style.display = "block";
-    el.textContent += (el.textContent ? "\n" : "") + msg;
-  }
+   function setStatusText(msg) {
+     // desactivado
+   }
+   
+   function appendLog(msg) {
+     // desactivado
+   }
 
   function clearLog() {
     const el = $("log");
