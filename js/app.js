@@ -578,7 +578,13 @@ if (match) {
   };
 
   xhr.onreadystatechange = () => {
-        if (xhr.status === 204) {
+    if (xhr.readyState === 4) {
+      hideOverlay();
+      $cancel.disabled = true;
+      $btn.disabled = false;
+      procBar.style.display = "none";
+
+      if (xhr.status === 204) {
         setStatus("⚠️ No se encontró infraestructura de fibra optica de BITEL en el área de impacto solicitada.");
         $log.style.display = "none";
         $log.textContent = "";
@@ -652,8 +658,6 @@ if (match) {
       }
     }
   };
-
-  xhr.send(fd);
 };
 
 // ======= CONVERTIR (POST /convert) =======
