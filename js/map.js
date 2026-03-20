@@ -534,19 +534,25 @@
   // API pública opcional
   // -----------------------------
    window.BitelKmzMap = {
-     init: initMap,
+     init: function () {
+       initMap();
+     },
      clear: clearUploadedLayer,
      loadFile: loadFileToMap,
      renderGeoJson: renderGeoJson,
      resize: function () {
        if (map) {
-         map.invalidateSize();
-         if (uploadedLayer) {
-           const bounds = uploadedLayer.getBounds();
-           if (bounds && bounds.isValid()) {
-             map.fitBounds(bounds, { padding: CONFIG.fitPadding });
+         setTimeout(() => map.invalidateSize(), 50);
+         setTimeout(() => map.invalidateSize(), 150);
+         setTimeout(() => {
+           map.invalidateSize();
+           if (uploadedLayer) {
+             const bounds = uploadedLayer.getBounds();
+             if (bounds && bounds.isValid()) {
+               map.fitBounds(bounds, { padding: CONFIG.fitPadding });
+             }
            }
-         }
+         }, 300);
        }
      }
    };
@@ -554,14 +560,13 @@
   // -----------------------------
   // Inicio automático
   // -----------------------------
-  document.addEventListener("DOMContentLoaded", function () {
-    try {
-      initMap();
-      bindMainFileInput();
-    } catch (error) {
-      logError("No se pudo iniciar el visor:", error);
-      setStatusText(`Error al iniciar visor: ${error.message}`);
-      appendLog(`ERROR DE INICIO: ${error.message}`);
-    }
-  });
+   document.addEventListener("DOMContentLoaded", function () {
+     try {
+       bindMainFileInput();
+     } catch (error) {
+       logError("No se pudo preparar el visor:", error);
+       setStatusText(`Error al preparar visor: ${error.message}`);
+       appendLog(`ERROR DE INICIO: ${error.message}`);
+     }
+   });
 })();
