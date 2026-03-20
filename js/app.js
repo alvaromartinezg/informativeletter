@@ -577,35 +577,46 @@ if (match) {
     setStatus("Operación cancelada por el usuario."); 
   };
 
-  xhr.onreadystatechange = () => {
+ xhr.onreadystatechange = () => {
     if (xhr.readyState === 4) {
       hideOverlay();
       $cancel.disabled = true;
       $btn.disabled = false;
       procBar.style.display = "none";
-
+  
+      // 🟡 Caso 1: No hay resultados (backend devuelve 204)
       if (xhr.status === 204) {
         setStatus("⚠️ No se encontró infraestructura de fibra optica de BITEL en el área de impacto solicitada.");
         $log.style.display = "none";
         $log.textContent = "";
-
+  
         downBar.style.width = "0%";
         downPct.textContent = "0%";
-
-        // Evitar reutilizar un archivo previo
+  
         lastBlob = null;
         lastName = null;
-
-      } else if (xhr.status >= 200 && xhr.status < 300) {
-        // Descargar al usuario
+        return;
+      }
+  
+      // 🟢 Caso 2: OK con archivo
+      if (xhr.status >= 200 && xhr.status < 300) {
         let filename = "Exportado.kmz";
         try {
           const cd = xhr.getResponseHeader("Content-Disposition") || "";
           const m = cd.match(/filename="?([^"]+)"?/i);
           if (m) filename = m[1];
         } catch {}
-
+  
         const blob = xhr.response;
+  
+        // 🔴 protección extra (por si viene vacío)
+        if (!blob || blob.size === 0) {
+          setStatus("⚠️ No se generó archivo (resultado vacío).");
+          lastBlob = null;
+          lastName = null;
+          return;
+        }
+  
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -614,47 +625,46 @@ if (match) {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
-
+  
         setStatus("✅ Listo. Archivo descargado.");
         downBar.style.width = "100%";
         downPct.textContent = "100%";
-
-        // Guardar en memoria (Blob) para la conversión
+  
         lastBlob = blob;
         lastName = filename;
-
-      } else {
-        const reader = new FileReader();
-
-        reader.onload = () => {
-          const txt = String(reader.result || "");
-
-          // Compatibilidad si el backend todavía devolviera [EMPTY] en texto
-          if (txt.includes("[EMPTY]")) {
-            setStatus("⚠️ No se encontró infraestructura de fibra optica de BITEL en el área de impacto solicitada.");
-            $log.style.display = "none";
-            $log.textContent = "";
-
-            downBar.style.width = "0%";
-            downPct.textContent = "0%";
-
-            lastBlob = null;
-            lastName = null;
-            return;
-          }
-
-          setError(`HTTP ${xhr.status} ${xhr.statusText}`, txt);
-        };
-
-        reader.onerror = () => {
-          setError(`HTTP ${xhr.status} ${xhr.statusText}`);
-        };
-
-        try {
-          reader.readAsText(xhr.response);
-        } catch {
-          setError(`HTTP ${xhr.status} ${xhr.statusText}`);
+        return;
+      }
+  
+      // 🔴 Caso 3: Error backend
+      const reader = new FileReader();
+  
+      reader.onload = () => {
+        const txt = String(reader.result || "");
+  
+        if (txt.includes("[EMPTY]")) {
+          setStatus("⚠️ No se encontró infraestructura de fibra optica de BITEL en el área de impacto solicitada.");
+          $log.style.display = "none";
+          $log.textContent = "";
+  
+          downBar.style.width = "0%";
+          downPct.textContent = "0%";
+  
+          lastBlob = null;
+          lastName = null;
+          return;
         }
+  
+        setError(`HTTP ${xhr.status} ${xhr.statusText}`, txt);
+      };
+  
+      reader.onerror = () => {
+        setError(`HTTP ${xhr.status} ${xhr.statusText}`);
+      };
+  
+      try {
+        reader.readAsText(xhr.response);
+      } catch {
+        setError(`HTTP ${xhr.status} ${xhr.statusText}`);
       }
     }
   };
