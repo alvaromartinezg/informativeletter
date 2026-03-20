@@ -68,7 +68,7 @@
 
     <!-- Sección de conversión -->
     <div class="card">
-      <h3 style="margin:6px 0 12px;">Conversión a PDF / DXF</h3>
+      <h3 style="margin:6px 0 12px;">Conversión a PDF / DXF(CAD)</h3>
       <div class="row">
         <label class="pill">Subir KMZ/KML(opcional):
           <input id="convFile" type="file" accept=".kmz,.kml" />
@@ -78,11 +78,11 @@
           <select id="convFormat">
             <option value="both" selected>Ambos (ZIP)</option>
             <option value="pdf">PDF</option>
-            <option value="dxf">DXF</option>
+            <option value="dxf">DXF(CAD)</option>
           </select>
         </label>
 
-        <button id="btnConvert" class="btn" type="button">Convertir a PDF/DXF</button>
+        <button id="btnConvert" class="btn" type="button">Convertir a PDF/DXF(CAD)</button>
       </div>
       <div class="hint" id="convHint" style="margin-top:8px;">
         Por defecto utiliza el KMZ exportado del paso anterior, caso contrario cargar un KMZ/KML.<br>
