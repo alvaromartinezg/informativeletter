@@ -5,12 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BITEL KMZ extractor for informative letters</title>
 
-  <!-- Performance hints -->
   <link rel="preconnect" href="https://unpkg.com">
   <link rel="dns-prefetch" href="https://unpkg.com">
-
-  <!-- CSS -->
   <link rel="stylesheet" href="css/styles.css?v=2">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  
 </head>
 <body>
   <div class="page">
@@ -42,6 +41,7 @@
       
       <button id="btn" class="btn accent">Procesar</button>
       <button id="cancel" class="btn danger" disabled>Cancelar</button>
+      <button id="btnMap" class="btn">Ver mapa</button>
     </div>
 
     <!-- Card: Progresos y estado -->
@@ -97,5 +97,21 @@
   <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="js/app.js?v=1"></script>
+
+  <!-- Modal visor mapa -->
+<div id="mapModal" class="map-modal">
+  <div class="map-modal-content">
+    
+    <div class="map-header">
+      <span>Visualizador KMZ/KML</span>
+      <button id="closeMap" class="btn danger">✕</button>
+    </div>
+
+    <div id="map"></div>
+
+  </div>
+</div>
+
+  
 </body>
 </html>
