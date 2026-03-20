@@ -31,6 +31,15 @@
       <label class="pill">Archivo:
         <input id="file" type="file" accept=".kmz,.kml" />
       </label>
+      
+      <label class="pill">Modo:
+        <select id="mode">
+          <option value="both" selected>Aéreo+Canalizado</option>
+          <option value="general">Solo aéreo</option>
+          <option value="canalizado">Solo canalizado</option>
+        </select>
+      </label>
+      
       <button id="btn" class="btn accent">Procesar</button>
       <button id="cancel" class="btn danger" disabled>Cancelar</button>
     </div>
