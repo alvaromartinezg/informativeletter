@@ -1,5 +1,6 @@
 // ======= DOM refs =======
 const $file   = document.getElementById("file");
+const $mode   = document.getElementById("mode");
 const $btn    = document.getElementById("btn");
 const $cancel = document.getElementById("cancel");
 const $status = document.getElementById("status");
@@ -538,6 +539,7 @@ if (match) {
 
   const fd = new FormData();
   fd.append("test_kmz", f, f.name);
+  fd.append("mode", $mode ? $mode.value : "both");
 
   xhr = new XMLHttpRequest();
   xhr.open("POST", PROCESS_URL);
